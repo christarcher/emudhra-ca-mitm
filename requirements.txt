@@ -1,3 +1,6 @@
 # eMudhra CA MITM 组件依赖
-# mitmproxy 三件套（mitmweb / mitmdump / mitmproxy）自带
-mitmproxy>=10.0,<11
+# mitmproxy 三件套（mitmweb / mitmdump / mitmproxy）自带。
+# 版本锁死，保证拉下仓库后 start.sh / start.ps1 自动建 venv 装到同一版本。
+# 要升级：改这里的版本号，删掉 .venv 让脚本下次重建即可。
+# 需 11+ 才能用 --set web_password 固定 Web UI token（本版本满足）。
+mitmproxy==12.2.3

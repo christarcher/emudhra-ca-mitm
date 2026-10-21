@@ -6,6 +6,9 @@ out/
 __pycache__/
 *.pyc
 
+# 本地 venv（由 start.sh / start.ps1 首次运行自动创建）
+.venv/
+
 # 编辑器
 .vscode/
 .idea/

@@ -1,6 +1,7 @@
 ﻿# start.ps1 —— 启动 mitmweb（Windows / PowerShell 版，等价于 start.sh）
 #   代理端口与 Web 观测界面都监听 0.0.0.0，方便在内网里从别的机器连。
 #   端口默认 28080 / 28081，避开常见服务。
+#   默认关闭 block_global，允许外部客户端连接代理。
 #
 # 用法（在 PowerShell 里）:
 #   .\start.ps1                              # 默认用 01-EM-OV-TLS-CA-G3C (d=4)
@@ -111,6 +112,7 @@ Write-Host "=============================================="
 try {
     & $MitmWeb `
         --set confdir="$Work" `
+        --set block_global=false `
         --listen-host $ProxyHost --listen-port $ProxyPort `
         --web-host $WebHost --web-port $WebPort `
         -s (Join-Path $Here "addon.py") `

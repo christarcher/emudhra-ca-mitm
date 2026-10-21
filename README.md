@@ -57,6 +57,14 @@ Web UI  : http://<本机IP>:28081/?token=emudhra  ← 浏览器打开，可实�
 PROXY_PORT=28888 WEB_PORT=28081 ./start.sh
 ```
 
+### 外部客户端连接
+
+Windows 的 `start.ps1` 和 Linux / macOS 的 `start.sh` 默认传入
+`--set block_global=false`，允许外部客户端连接代理，无需额外参数或环境变量。
+更新脚本后请停止当前服务并重新启动，解决
+`Client connection from ... killed by block_global option.` 报错。
+设备仍需能访问监听地址和端口，防火墙也需允许连接；Web UI 使用原有 token。
+
 ### 固定 Web UI 的 token（不用每次抄终端）
 
 从 **mitmproxy 12**（CVE-2025-23217 的修复）起，mitmweb 默认给 Web UI 加了强制

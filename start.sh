@@ -2,6 +2,7 @@
 # start.sh —— 启动 mitmweb（mitmproxy 三件套的 Web UI 版）
 #   代理端口与 Web 观测界面都监听 0.0.0.0，方便在内网里从别的机器连。
 #   端口默认 28080 / 28081，避开常见服务（8080/8081 等）。
+#   默认关闭 block_global，允许外部客户端连接代理。
 #
 # 用法:
 #   ./start.sh                       # 默认用 01-EM-OV-TLS-CA-G3C (d=4)
@@ -87,6 +88,7 @@ echo "=============================================="
 # 代理与 Web UI 默认都绑 0.0.0.0，便于内网里从别的机器访问（可用 WEB_HOST/PROXY_HOST 改）。
 exec "$MITMWEB" \
   --set confdir="$WORK" \
+  --set block_global=false \
   --listen-host "$PROXY_HOST" --listen-port "$PROXY_PORT" \
   --web-host "$WEB_HOST" --web-port "$WEB_PORT" \
   -s "$HERE/addon.py" \

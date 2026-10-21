@@ -94,11 +94,12 @@ Windows 有两条路：**原生 PowerShell 脚本（推荐）** 或 WSL / Git Ba
 
 ### 方式 A：原生 PowerShell（`start.ps1`）
 
-1. 装 Python 3（[python.org](https://www.python.org/downloads/windows/) 或 `winget install Python.Python.3.12`），安装时勾选 *Add to PATH*。**只需要这一步**，依赖由脚本自动装。
+1. 装 Python **3.12+**（[python.org](https://www.python.org/downloads/windows/) 或 `winget install Python.Python.3.12`），安装时勾选 *Add to PATH*。用 `python --version` 确认版本；依赖由脚本自动装。
 2. 启动（在仓库目录的 PowerShell 里）。首次运行会自动建 `.venv\` 并装依赖（需联网，仅此一次）：
 
    ```powershell
    .\start.ps1                              # 默认 01-EM-OV-TLS-CA-G3C (d=4)
+   .\start.ps1 -NoBrowser                   # 启动服务后手动打开 Web UI
    .\start.ps1 06-EM-DV-TLS-CA-G3B          # 指定某张泄露CA
    $env:PROXY_PORT=28888; $env:WEB_PORT=28081; .\start.ps1
    $env:WEB_PASSWORD="mysecret"; .\start.ps1
@@ -119,6 +120,20 @@ Windows 有两条路：**原生 PowerShell 脚本（推荐）** 或 WSL / Git Ba
 
 3. 让被测设备连上：Windows 防火墙首次会弹窗，勾选允许 `python` 在
    **专用网络**上通信；手机代理填 `本机IP:28080`。查本机 IP：`ipconfig`。
+
+### Windows PowerShell 5.1 中文乱码 / ParserError
+
+`start.ps1` 使用 **UTF-8 with BOM** 编码，以兼容 Windows 自带的 PowerShell 5.1。
+编辑后请保留此编码：不带 BOM 的 UTF-8 会被 PowerShell 5.1 按系统 ANSI 编码
+（中文 Windows 通常是 GBK）读取，可能报“字符串缺少终止符”“数组索引表达式丢失”
+等语法错误。`chcp 65001` 或调整执行策略无法修正脚本文件的读取编码。
+
+如果使用的是旧版脚本，可在仓库目录运行一次下面的命令，再启动：
+
+```powershell
+python -c "from pathlib import Path; p=Path('start.ps1'); s=p.read_text(encoding='utf-8-sig'); p.write_bytes(s.encode('utf-8-sig'))"
+.\start.ps1
+```
 
 ### 方式 B：WSL / Git Bash
 

@@ -1,4 +1,4 @@
-# start.ps1 —— 启动 mitmweb（Windows / PowerShell 版，等价于 start.sh）
+﻿# start.ps1 —— 启动 mitmweb（Windows / PowerShell 版，等价于 start.sh）
 #   代理端口与 Web 观测界面都监听 0.0.0.0，方便在内网里从别的机器连。
 #   端口默认 28080 / 28081，避开常见服务。
 #
@@ -21,7 +21,8 @@
 
 [CmdletBinding()]
 param(
-    [string]$CaDir = "01-EM-OV-TLS-CA-G3C"
+    [string]$CaDir = "01-EM-OV-TLS-CA-G3C",
+    [switch]$NoBrowser
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,8 +54,17 @@ if (-not (Test-Path $MitmWeb)) {
     }
     Write-Host "[*] 首次运行：创建 venv 并安装 mitmproxy（需联网，仅此一次）..."
     & $Python -m venv $Venv
+    if ($LASTEXITCODE -ne 0) {
+        throw "创建 Python 虚拟环境失败，请检查上面的错误。"
+    }
     & $VenvPy -m pip install --upgrade pip | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "升级 pip 失败，请检查网络连接和上面的错误。"
+    }
     & $VenvPy -m pip install -r (Join-Path $Here "requirements.txt")
+    if ($LASTEXITCODE -ne 0) {
+        throw "安装 mitmproxy 失败，请检查上面的 pip 错误后重新运行脚本。"
+    }
 }
 
 $CaPem = Join-Path $Here "cas\$CaDir\mitmproxy-ca.pem"
@@ -67,7 +77,8 @@ if (-not (Test-Path $CaPem)) {
 
 # mitmproxy 只从 confdir/mitmproxy-ca.pem 读取 CA（私钥+证书链），
 # 用一个临时 confdir 指向选定 CA，避免污染仓库。
-$Work = Join-Path ([System.IO.Path]::GetTempPath()) ("emudhra-mitm-" + [System.Guid]::NewGuid().ToString("N"))
+$TempRoot = (Resolve-Path -LiteralPath $env:TEMP).Path
+$Work = Join-Path $TempRoot ("emudhra-mitm-" + (New-Guid))
 New-Item -ItemType Directory -Path $Work | Out-Null
 Copy-Item $CaPem (Join-Path $Work "mitmproxy-ca.pem")
 
@@ -82,6 +93,9 @@ if ($Major -ge 11 -and $WebPassword -ne "") {
     $WebLogin = "http://<本机IP>:$WebPort/?token=$WebPassword   (本机也可用 127.0.0.1)"
 } else {
     $WebLogin = "http://<本机IP>:$WebPort/    (此 mitmproxy 版本无需 token)"
+}
+if ($NoBrowser) {
+    $AuthArgs += @("--set", "web_open_browser=false")
 }
 
 Write-Host "=============================================="
@@ -102,5 +116,7 @@ try {
         -s (Join-Path $Here "addon.py") `
         @AuthArgs
 } finally {
-    Remove-Item -Recurse -Force $Work -ErrorAction SilentlyContinue
+    if ((Split-Path -Parent $Work) -eq $TempRoot -and (Split-Path -Leaf $Work) -like "emudhra-mitm-*") {
+        Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }

@@ -24,6 +24,16 @@ def _log(line: str) -> None:
         f.write(line + "\n")
 
 
+def _raw_len(msg) -> int:
+    """正文在网络上的原始字节数。
+
+    不碰 msg.content —— 访问它会按 Content-Encoding 解码，遇到未安装的编码
+    （如未装 zstandard 时的 zstd）会抛异常，连带把插件整个弄崩。只取长度用
+    raw_content 即可，既不会失败也更能反映真实传输大小。
+    """
+    return len(msg.raw_content or b"")
+
+
 def request(flow: http.HTTPFlow) -> None:
     h = flow.request.headers
     auth = h.get("Authorization", "")
@@ -39,11 +49,13 @@ def response(flow: http.HTTPFlow) -> None:
     r = flow.response
     _log(
         f"<< {r.status_code} {flow.request.pretty_url} "
-        f"len={len(r.content)} ctype={r.headers.get('content-type','-')}"
+        f"len={_raw_len(r)} ctype={r.headers.get('content-type','-')}"
     )
-    if SAVE_BODY and r.content and len(r.content) <= MAX_BODY:
+    # 存盘用原始字节（raw_content），不强制解码，避免 zstd/br 等未装编码时报错。
+    raw = r.raw_content
+    if SAVE_BODY and raw and len(raw) <= MAX_BODY:
         import hashlib
         os.makedirs(BODY_DIR, exist_ok=True)
         name = hashlib.md5(flow.request.pretty_url.encode()).hexdigest()[:16]
         with open(os.path.join(BODY_DIR, name + ".bin"), "wb") as f:
-            f.write(r.content)
+            f.write(raw)

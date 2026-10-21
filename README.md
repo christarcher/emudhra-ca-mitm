@@ -231,6 +231,24 @@ cat cas/01-EM-OV-TLS-CA-G3C/mitmproxy-ca-cert.pem
 - **SSL Pinning**：被 pin 的连接握手失败，资源加载不出来（见下一节用 frida 绕过）。
 - mitmweb 默认**只高亮 HTTP(S) 流**；纯 TCP/WebSocket 流也会列出但样式不同，注意别划过去了。
 
+### 3. `unknown encoding: zstd` / Addon error 崩在 r.content
+
+响应用了 **zstd 压缩**（body 以 `28 B5 2F FD` 开头），而 venv 没装 `zstandard` 库，
+解码就失败。`requirements.txt` 已加入 `zstandard`，**新建的 venv 自动带上**；已经建好的
+旧 venv 二选一补装：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install zstandard   # 直接装进现有 venv
+# 或删掉 .venv\ 让 start.ps1 下次重建
+```
+
+```bash
+./.venv/bin/pip install zstandard                      # Linux/macOS
+```
+
+> addon 现在只用 `raw_content` 取长度/存盘，不会再因为未知编码而崩；装 `zstandard`
+> 主要是为了让 Web UI 能把 zstd 响应体**解码显示**出来。
+
 ### 2. 像 `POST http://59.82.113.10:443/amdc/mobileDispatch` 这种“奇怪流量”
 
 这**不是 mitmproxy 识别错**。它是**阿里系移动网络库的 AMDC 调度**（Alibaba Mobile Dispatch

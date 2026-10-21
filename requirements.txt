@@ -4,3 +4,6 @@
 # 要升级：改这里的版本号，删掉 .venv 让脚本下次重建即可。
 # 需 11+ 才能用 --set web_password 固定 Web UI token（本版本满足）。
 mitmproxy==12.2.3
+# zstd 响应解码：不装的话 Content-Encoding: zstd 的响应在 Web UI 里无法解码显示
+# （报 "unknown encoding: zstd"）。现在越来越多站点/CDN 用 zstd。
+zstandard

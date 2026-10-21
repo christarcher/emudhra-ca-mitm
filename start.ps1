@@ -95,7 +95,9 @@ $verLine = (& $MitmDump --version 2>$null | Select-String '^Mitmproxy:')
 if ($verLine -and ($verLine.Line -match 'Mitmproxy:\s*(\d+)')) { $Major = [int]$Matches[1] }
 
 # 上游 TLS 证书校验：默认关闭（--ssl-insecure），$env:SSL_VERIFY="1" 时恢复。
-$SslArgs = if ($SslVerify -eq "1") { @("--no-ssl-insecure") } else { @("--ssl-insecure") }
+# 注意必须用 [string[]] 固定成数组：单元素数组在 if 赋值时会被拆成字符串，
+# 之后 @SslArgs 会把字符串按字符逐个展开（--ssl-insecure 变成 "- - s s l ..."）。
+[string[]]$SslArgs = if ($SslVerify -eq "1") { "--no-ssl-insecure" } else { "--ssl-insecure" }
 
 $AuthArgs = @()
 if ($Major -ge 11 -and $WebPassword -ne "") {

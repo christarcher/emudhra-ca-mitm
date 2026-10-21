@@ -2,8 +2,8 @@
 
 面向 **App 调试 / 抓包** 的 mitmproxy 组件。利用 2026-10 事件中泄露私钥的 eMudhra 中间 CA，在**目标设备无需安装任何个人证书**的前提下完成 HTTPS 中间人观测，适合已停止更新、系统信任库较旧的手机/电脑上调试应用。
 
-对外提供一个 **HTTP 代理端口**（默认 `28080`）、一个 **SOCKS5 代理端口**（默认 `28082`）
-和一个 **Web 观测界面**（mitmweb，默认 `28081`）。三者都监听 `0.0.0.0`，方便在内网里从
+对外提供一个 **HTTP 代理端口**（默认 `28081`）、一个 **SOCKS5 代理端口**（默认 `28082`）
+和一个 **Web 观测界面**（mitmweb，默认 `28080`）。三者都监听 `0.0.0.0`，方便在内网里从
 别的机器连；Web UI 由固定 token 保护。默认**不校验上游服务器的 TLS 证书**（`--ssl-insecure`），
 避免上游证书问题把流量掐断导致看不到；需要校验时设 `SSL_VERIFY=1`。
 
@@ -44,20 +44,20 @@ chmod +x start.sh issue_cert.sh
 启动后：
 
 ```
-HTTP 代理: http://<本机IP>:28080                 ← 手机/被测设备填这个
+HTTP 代理: http://<本机IP>:28081                 ← 手机/被测设备填这个
 SOCKS5  : socks5://<本机IP>:28082                ← 直连型 app / 自建网络库用这个
-Web UI  : http://<本机IP>:28081/?token=emudhra   ← 浏览器打开，可实时看/改请求
+Web UI  : http://<本机IP>:28080/?token=emudhra   ← 浏览器打开，可实时看/改请求
                                                     （本机也可用 127.0.0.1）
 ```
 
-- 端口默认 **28080(HTTP) / 28081(Web) / 28082(SOCKS5)**，避开 8080/8081 等常见服务。
+- 端口默认 **28080(Web) / 28081(HTTP) / 28082(SOCKS5)**，避开 8080/8081 等常见服务。
 - 代理与 Web UI 都绑 `0.0.0.0`，内网里的其它机器也能连（查本机 IP：Linux `ip a`，Windows `ipconfig`）。
 - Web UI 的 `?token=` 见下一节；首次带 token 打开后会写 cookie，之后免输。
 
 端口可改：
 
 ```bash
-PROXY_PORT=28888 WEB_PORT=28081 SOCKS_PORT=28082 ./start.sh
+PROXY_PORT=28888 WEB_PORT=28080 SOCKS_PORT=28082 ./start.sh
 ```
 
 ### SOCKS5 代理（默认 28082）
@@ -92,11 +92,11 @@ Windows 的 `start.ps1` 和 Linux / macOS 的 `start.sh` 默认传入
 `--set web_password=<固定值>` 把它钉死，默认值 `emudhra`，之后一直用同一个链接即可：
 
 ```
-http://<本机IP>:28081/?token=emudhra      # 本机也可用 http://127.0.0.1:28081/?token=emudhra
+http://<本机IP>:28080/?token=emudhra      # 本机也可用 http://127.0.0.1:28080/?token=emudhra
 ```
 
 首次用这个带 `?token=` 的链接打开后，mitmweb 会写一个长期 cookie，之后直接开
-`http://<本机IP>:28081/` 也不用再输。想改成自己的 token：
+`http://<本机IP>:28080/` 也不用再输。想改成自己的 token：
 
 ```bash
 WEB_PASSWORD=mysecret ./start.sh           # 之后用 ?token=mysecret
@@ -129,7 +129,7 @@ Windows 有两条路：**原生 PowerShell 脚本（推荐）** 或 WSL / Git Ba
    .\start.ps1                              # 默认 01-EM-OV-TLS-CA-G3C (d=4)
    .\start.ps1 -NoBrowser                   # 启动服务后手动打开 Web UI
    .\start.ps1 06-EM-DV-TLS-CA-G3B          # 指定某张泄露CA
-   $env:PROXY_PORT=28888; $env:WEB_PORT=28081; .\start.ps1
+   $env:PROXY_PORT=28888; $env:WEB_PORT=28080; .\start.ps1
    $env:WEB_PASSWORD="mysecret"; .\start.ps1
    $env:WEB_HOST="127.0.0.1"; .\start.ps1   # 只想本机访问 Web UI 时
    ```
@@ -147,7 +147,7 @@ Windows 有两条路：**原生 PowerShell 脚本（推荐）** 或 WSL / Git Ba
    用临时 confdir 挂载选定 CA、退出时清理。
 
 3. 让被测设备连上：Windows 防火墙首次会弹窗，勾选允许 `python` 在
-   **专用网络**上通信；手机代理填 `本机IP:28080`。查本机 IP：`ipconfig`。
+   **专用网络**上通信；手机代理填 `本机IP:28081`。查本机 IP：`ipconfig`。
 
 ### Windows PowerShell 5.1 中文乱码 / ParserError
 
@@ -185,8 +185,8 @@ certutil -delstore root "EM OV TLS CA - G3C"
 **Android / iOS（推荐，无需装证书）**
 
 1. 设备与运行本组件的机器处于同一局域网
-2. Wi-Fi 设置 → 代理 → 手动 → 主机 `本机IP`、端口 `28080`
-3. 直接打开 App，即可在 Web UI (`http://<本机IP>:28081/?token=emudhra`) 看到明文请求
+2. Wi-Fi 设置 → 代理 → 手动 → 主机 `本机IP`、端口 `28081`
+3. 直接打开 App，即可在 Web UI (`http://<本机IP>:28080/?token=emudhra`) 看到明文请求
 
 > 因为伪造链锚定系统信任库，**大多数 Android/iOS 无需安装用户证书**。
 > 若应用额外做了 SSL Pinning，见第 5 节。
@@ -195,9 +195,9 @@ certutil -delstore root "EM OV TLS CA - G3C"
 
 ```bash
 # Chrome/Chromium
-google-chrome --proxy-server="http://127.0.0.1:28080"
+google-chrome --proxy-server="http://127.0.0.1:28081"
 # 或直接 export（多数命令行工具生效）
-export https_proxy=http://127.0.0.1:28080
+export https_proxy=http://127.0.0.1:28081
 ```
 
 ### 手动安装证书（可选，兼容旧客户端 / 需要显式信任时）

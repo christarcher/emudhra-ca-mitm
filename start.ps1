@@ -1,13 +1,13 @@
 ﻿# start.ps1 —— 启动 mitmweb（Windows / PowerShell 版，等价于 start.sh）
 #   同时提供 HTTP(regular) 与 SOCKS5 两种代理，Web 观测界面都监听 0.0.0.0。
-#   端口默认 28080(HTTP) / 28081(Web) / 28082(SOCKS5)，避开常见服务。
+#   端口默认 28080(Web) / 28081(HTTP) / 28082(SOCKS5)，避开常见服务。
 #   默认关闭 block_global，允许外部客户端连接代理。
 #   默认不校验上游 TLS 证书（--ssl-insecure），$env:SSL_VERIFY="1" 可恢复校验。
 #
 # 用法（在 PowerShell 里）:
 #   .\start.ps1                              # 默认用 01-EM-OV-TLS-CA-G3C (d=4)
 #   .\start.ps1 06-EM-DV-TLS-CA-G3B          # 指定某张泄露CA
-#   $env:PROXY_PORT=28888; $env:WEB_PORT=28081; $env:SOCKS_PORT=28082; .\start.ps1
+#   $env:PROXY_PORT=28888; $env:WEB_PORT=28080; $env:SOCKS_PORT=28082; .\start.ps1
 #   $env:SSL_VERIFY="1"; .\start.ps1            # 恢复对上游证书的校验
 #   $env:WEB_PASSWORD="mysecret"; .\start.ps1   # 自定义 Web UI 固定 token
 #
@@ -31,8 +31,8 @@ param(
 $ErrorActionPreference = "Stop"
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
-$ProxyPort   = if ($env:PROXY_PORT)             { $env:PROXY_PORT }   else { "28080" }
-$WebPort     = if ($env:WEB_PORT)               { $env:WEB_PORT }     else { "28081" }
+$ProxyPort   = if ($env:PROXY_PORT)             { $env:PROXY_PORT }   else { "28081" }
+$WebPort     = if ($env:WEB_PORT)               { $env:WEB_PORT }     else { "28080" }
 # 监听地址：默认 0.0.0.0 便于内网里从别的机器连。只想本机用就 $env:WEB_HOST="127.0.0.1"。
 $WebHost     = if ($env:WEB_HOST)               { $env:WEB_HOST }     else { "0.0.0.0" }
 $ProxyHost   = if ($env:PROXY_HOST)             { $env:PROXY_HOST }   else { "0.0.0.0" }

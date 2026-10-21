@@ -1,0 +1,7 @@
+CN         : CN=EM OV TLS CA - G3B,O=eMudhra BV,C=NL
+issuer     : CN=emSign Root TLS CA - G3,O=eMudhra Technologies Limited,C=IN
+private d  : 155 (0x9b)
+curve      : P-384 (secp384r1)
+serial     : 0x6cada367fb1c100088120ea202d568
+validity   : 2025-04-30 .. 2040-04-28
+chain      : EMOVTLSCAG3B -> crosssign_roottlscag3 -> emSign ECC Root CA - G3 (system trusted)

@@ -1,0 +1,3 @@
+# eMudhra CA MITM 组件依赖
+# mitmproxy 三件套（mitmweb / mitmdump / mitmproxy）自带
+mitmproxy>=10.0,<11

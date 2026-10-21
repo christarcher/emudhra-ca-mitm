@@ -1,0 +1,7 @@
+CN         : CN=EM OV CS CA - G3C,O=eMudhra Inc,C=US
+issuer     : CN=emSign Root CS CA - G3,O=eMudhra Technologies Limited,C=IN
+private d  : 237 (0xed)
+curve      : P-384 (secp384r1)
+serial     : 0x544b7f922c31ae220a4a922916f6e6
+validity   : 2025-04-30 .. 2040-04-28
+chain      : EMOVCSCAG3C -> crosssign_rootcscag3 -> emSign ECC Root CA - G3 (system trusted)

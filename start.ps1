@@ -1,12 +1,14 @@
 ﻿# start.ps1 —— 启动 mitmweb（Windows / PowerShell 版，等价于 start.sh）
-#   代理端口与 Web 观测界面都监听 0.0.0.0，方便在内网里从别的机器连。
-#   端口默认 28080 / 28081，避开常见服务。
+#   同时提供 HTTP(regular) 与 SOCKS5 两种代理，Web 观测界面都监听 0.0.0.0。
+#   端口默认 28080(HTTP) / 28081(Web) / 28082(SOCKS5)，避开常见服务。
 #   默认关闭 block_global，允许外部客户端连接代理。
+#   默认不校验上游 TLS 证书（--ssl-insecure），$env:SSL_VERIFY="1" 可恢复校验。
 #
 # 用法（在 PowerShell 里）:
 #   .\start.ps1                              # 默认用 01-EM-OV-TLS-CA-G3C (d=4)
 #   .\start.ps1 06-EM-DV-TLS-CA-G3B          # 指定某张泄露CA
-#   $env:PROXY_PORT=28888; $env:WEB_PORT=28081; .\start.ps1
+#   $env:PROXY_PORT=28888; $env:WEB_PORT=28081; $env:SOCKS_PORT=28082; .\start.ps1
+#   $env:SSL_VERIFY="1"; .\start.ps1            # 恢复对上游证书的校验
 #   $env:WEB_PASSWORD="mysecret"; .\start.ps1   # 自定义 Web UI 固定 token
 #
 # 首次运行若提示脚本被禁止执行:
@@ -34,6 +36,10 @@ $WebPort     = if ($env:WEB_PORT)               { $env:WEB_PORT }     else { "28
 # 监听地址：默认 0.0.0.0 便于内网里从别的机器连。只想本机用就 $env:WEB_HOST="127.0.0.1"。
 $WebHost     = if ($env:WEB_HOST)               { $env:WEB_HOST }     else { "0.0.0.0" }
 $ProxyHost   = if ($env:PROXY_HOST)             { $env:PROXY_HOST }   else { "0.0.0.0" }
+# SOCKS5 代理端口（默认 28082）。自建网络库/直连型 app 不走 HTTP 代理时用它。
+$SocksPort   = if ($env:SOCKS_PORT)             { $env:SOCKS_PORT }   else { "28082" }
+# 默认不校验上游 TLS 证书；$env:SSL_VERIFY="1" 时恢复校验。
+$SslVerify   = if ($env:SSL_VERIFY)             { $env:SSL_VERIFY }   else { "0" }
 # 固定 token；设成空字符串则退回 mitmproxy 默认的随机 token。
 $WebPassword = if ($null -ne $env:WEB_PASSWORD) { $env:WEB_PASSWORD } else { "emudhra" }
 
@@ -88,6 +94,9 @@ $Major = 0
 $verLine = (& $MitmDump --version 2>$null | Select-String '^Mitmproxy:')
 if ($verLine -and ($verLine.Line -match 'Mitmproxy:\s*(\d+)')) { $Major = [int]$Matches[1] }
 
+# 上游 TLS 证书校验：默认关闭（--ssl-insecure），$env:SSL_VERIFY="1" 时恢复。
+$SslArgs = if ($SslVerify -eq "1") { @("--no-ssl-insecure") } else { @("--ssl-insecure") }
+
 $AuthArgs = @()
 if ($Major -ge 11 -and $WebPassword -ne "") {
     $AuthArgs = @("--set", "web_password=$WebPassword")
@@ -102,7 +111,9 @@ if ($NoBrowser) {
 Write-Host "=============================================="
 Write-Host " eMudhra CA MITM   (app 调试用 / 旧手机免装证书)"
 Write-Host "  使用 CA : $CaDir"
-Write-Host "  代理地址: http://<本机IP>:$ProxyPort   <-- 手机填这个"
+Write-Host "  HTTP 代理: http://<本机IP>:$ProxyPort   <-- 手机填这个"
+Write-Host "  SOCKS5  : socks5://<本机IP>:$SocksPort  <-- 直连型 app / 自建网络库用这个"
+Write-Host "  上游校验: $(if ($SslVerify -eq '1') { '开启' } else { '关闭(默认, 不校验上游证书)' })"
 Write-Host "  Web UI  : $WebLogin"
 Write-Host "            <-- 浏览器打开（已固定 token，无需再抄终端）"
 Write-Host "  停止    : Ctrl-C"
@@ -113,7 +124,10 @@ try {
     & $MitmWeb `
         --set confdir="$Work" `
         --set block_global=false `
-        --listen-host $ProxyHost --listen-port $ProxyPort `
+        @SslArgs `
+        --listen-host $ProxyHost `
+        --mode "regular@$ProxyPort" `
+        --mode "socks5@$SocksPort" `
         --web-host $WebHost --web-port $WebPort `
         -s (Join-Path $Here "addon.py") `
         @AuthArgs

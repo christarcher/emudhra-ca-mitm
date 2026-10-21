@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # start.sh —— 启动 mitmweb（mitmproxy 三件套的 Web UI 版）
-#   代理端口与 Web 观测界面都监听 0.0.0.0，方便在内网里从别的机器连。
-#   端口默认 28080 / 28081，避开常见服务（8080/8081 等）。
+#   同时提供 HTTP(regular) 与 SOCKS5 两种代理，Web 观测界面都监听 0.0.0.0，
+#   方便在内网里从别的机器连。
+#   端口默认 28080(HTTP) / 28081(Web) / 28082(SOCKS5)，避开常见服务。
 #   默认关闭 block_global，允许外部客户端连接代理。
+#   默认不校验上游 TLS 证书（--ssl-insecure），SSL_VERIFY=1 可恢复校验。
 #
 # 用法:
 #   ./start.sh                       # 默认用 01-EM-OV-TLS-CA-G3C (d=4)
 #   ./start.sh 06-EM-DV-TLS-CA-G3B   # 指定某张泄露CA
-#   PROXY_PORT=28888 WEB_PORT=28081 ./start.sh
+#   PROXY_PORT=28888 WEB_PORT=28081 SOCKS_PORT=28082 ./start.sh
+#   SSL_VERIFY=1 ./start.sh          # 恢复对上游证书的校验
 #   WEB_PASSWORD=mysecret ./start.sh # 自定义 Web UI 固定 token（见下）
 #
 # 关于 Web UI 的 token：
@@ -25,6 +28,12 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 CA_DIR="${1:-01-EM-OV-TLS-CA-G3C}"
 PROXY_PORT="${PROXY_PORT:-28080}"
 WEB_PORT="${WEB_PORT:-28081}"
+# SOCKS5 代理端口（默认 28082）。很多 app 的自建网络库（如阿里网络库/accs）
+# 不走系统 HTTP 代理而是直连 IP，SOCKS5 能把这类原始 TCP 连接也抓进来。
+SOCKS_PORT="${SOCKS_PORT:-28082}"
+# 默认不校验上游服务器的 TLS 证书（--ssl-insecure），避免上游证书问题导致
+# 连接被 mitmproxy 掐断、从而在 Web UI 里“看不到”那些请求。设 SSL_VERIFY=1 恢复校验。
+SSL_VERIFY="${SSL_VERIFY:-0}"
 # 监听地址：默认 0.0.0.0 便于内网里从别的机器连。只想本机用就 WEB_HOST=127.0.0.1。
 WEB_HOST="${WEB_HOST:-0.0.0.0}"
 PROXY_HOST="${PROXY_HOST:-0.0.0.0}"
@@ -68,6 +77,12 @@ trap 'rm -rf "$WORK"' EXIT
 MITM_MAJOR="$("$MITMDUMP" --version 2>/dev/null | awk '/^Mitmproxy:/{split($2,a,"."); print a[1]; exit}')"
 MITM_MAJOR="${MITM_MAJOR:-0}"
 
+# 上游 TLS 证书校验：默认关闭（--ssl-insecure），SSL_VERIFY=1 时恢复。
+SSL_ARGS=(--ssl-insecure)
+if [ "$SSL_VERIFY" = "1" ]; then
+  SSL_ARGS=(--no-ssl-insecure)
+fi
+
 WEB_AUTH_ARGS=()
 if [ "$MITM_MAJOR" -ge 11 ] && [ -n "$WEB_PASSWORD" ]; then
   WEB_AUTH_ARGS=(--set "web_password=$WEB_PASSWORD")
@@ -79,17 +94,24 @@ fi
 echo "=============================================="
 echo " eMudhra CA MITM   (app 调试用 / 旧手机免装证书)"
 echo "  使用 CA : $CA_DIR"
-echo "  代理地址: http://<本机IP>:$PROXY_PORT   <-- 手机填这个"
+echo "  HTTP 代理: http://<本机IP>:$PROXY_PORT   <-- 手机填这个"
+echo "  SOCKS5  : socks5://<本机IP>:$SOCKS_PORT  <-- 直连型 app / 自建网络库用这个"
+echo "  上游校验: $([ "$SSL_VERIFY" = "1" ] && echo '开启' || echo '关闭(默认, 不校验上游证书)')"
 echo "  Web UI  : $WEB_LOGIN"
 echo "            <-- 浏览器打开（已固定 token，无需再抄终端）"
 echo "  停止    : Ctrl-C"
 echo "=============================================="
 
 # 代理与 Web UI 默认都绑 0.0.0.0，便于内网里从别的机器访问（可用 WEB_HOST/PROXY_HOST 改）。
+# 同时开两种代理：regular(HTTP) 在 PROXY_PORT，socks5 在 SOCKS_PORT；
+# --listen-host 作为两者的默认绑定地址（mode 里只写了端口，未覆盖 host）。
 exec "$MITMWEB" \
   --set confdir="$WORK" \
   --set block_global=false \
-  --listen-host "$PROXY_HOST" --listen-port "$PROXY_PORT" \
+  "${SSL_ARGS[@]}" \
+  --listen-host "$PROXY_HOST" \
+  --mode "regular@$PROXY_PORT" \
+  --mode "socks5@$SOCKS_PORT" \
   --web-host "$WEB_HOST" --web-port "$WEB_PORT" \
   -s "$HERE/addon.py" \
   ${WEB_AUTH_ARGS[@]+"${WEB_AUTH_ARGS[@]}"} \

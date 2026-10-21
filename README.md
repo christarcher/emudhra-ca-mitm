@@ -2,8 +2,10 @@
 
 面向 **App 调试 / 抓包** 的 mitmproxy 组件。利用 2026-10 事件中泄露私钥的 eMudhra 中间 CA，在**目标设备无需安装任何个人证书**的前提下完成 HTTPS 中间人观测，适合已停止更新、系统信任库较旧的手机/电脑上调试应用。
 
-对外提供一个 **HTTP 代理端口**（默认 `28080`）和一个 **Web 观测界面**（mitmweb，默认
-`28081`）。两者都监听 `0.0.0.0`，方便在内网里从别的机器连；Web UI 由固定 token 保护。
+对外提供一个 **HTTP 代理端口**（默认 `28080`）、一个 **SOCKS5 代理端口**（默认 `28082`）
+和一个 **Web 观测界面**（mitmweb，默认 `28081`）。三者都监听 `0.0.0.0`，方便在内网里从
+别的机器连；Web UI 由固定 token 保护。默认**不校验上游服务器的 TLS 证书**（`--ssl-insecure`），
+避免上游证书问题把流量掐断导致看不到；需要校验时设 `SSL_VERIFY=1`。
 
 ---
 
@@ -42,19 +44,37 @@ chmod +x start.sh issue_cert.sh
 启动后：
 
 ```
-代理地址: http://<本机IP>:28080                 ← 手机/被测设备填这个
-Web UI  : http://<本机IP>:28081/?token=emudhra  ← 浏览器打开，可实时看/改请求
-                                                   （本机也可用 127.0.0.1）
+HTTP 代理: http://<本机IP>:28080                 ← 手机/被测设备填这个
+SOCKS5  : socks5://<本机IP>:28082                ← 直连型 app / 自建网络库用这个
+Web UI  : http://<本机IP>:28081/?token=emudhra   ← 浏览器打开，可实时看/改请求
+                                                    （本机也可用 127.0.0.1）
 ```
 
-- 端口默认 **28080 / 28081**，避开 8080/8081 等常见服务。
+- 端口默认 **28080(HTTP) / 28081(Web) / 28082(SOCKS5)**，避开 8080/8081 等常见服务。
 - 代理与 Web UI 都绑 `0.0.0.0`，内网里的其它机器也能连（查本机 IP：Linux `ip a`，Windows `ipconfig`）。
 - Web UI 的 `?token=` 见下一节；首次带 token 打开后会写 cookie，之后免输。
 
 端口可改：
 
 ```bash
-PROXY_PORT=28888 WEB_PORT=28081 ./start.sh
+PROXY_PORT=28888 WEB_PORT=28081 SOCKS_PORT=28082 ./start.sh
+```
+
+### SOCKS5 代理（默认 28082）
+
+有些 app（尤其带**自建网络库**的，如阿里系 accs/networksdk、各类“长连接/加速”SDK）
+**不读系统 HTTP 代理**，而是自己直连目标 IP，HTTP 代理口因此抓不到它们。给设备配
+**SOCKS5 代理**（`socks5://<本机IP>:28082`）能把这些原始 TCP 连接也劫持进来。Android 上
+可用 `ProxyDroid`、`Clash`/`Surfboard` 之类工具把全局流量转发到本机 SOCKS5。
+
+### 不校验上游 TLS 证书（默认开启）
+
+脚本默认传 `--ssl-insecure`：mitmproxy 连上游服务器时**不校验**对方证书。这样即使上游用
+了自签/过期/不在本机信任库里的证书，连接也不会被掐断，你才能在 Web UI 里看到那条流量。
+想恢复校验：
+
+```bash
+SSL_VERIFY=1 ./start.sh
 ```
 
 ### 外部客户端连接
@@ -192,6 +212,37 @@ cat cas/01-EM-OV-TLS-CA-G3C/mitmproxy-ca-cert.pem
 #   macOS  : security add-trusted-cert -d -p ssl -p basic \
 #              -k /Library/Keychains/System.keychain mitmproxy-ca-cert.pem
 ```
+
+---
+
+## 常见现象排查
+
+### 1. 有些图片/静态资源看不到链接
+
+抓包里缺了一部分（常见于 CDN 图片、视频），通常**不是 mitmproxy 漏记**，而是那些连接
+根本没走到代理上。主要原因：
+
+- **HTTP/3 (QUIC, UDP 443)**：HTTP 代理只处理 TCP，走 QUIC 的资源完全绕过代理，所以看不到。
+  浏览器/app 只有在 UDP 443 不通时才回落到 TCP。排查：在网络层**屏蔽 UDP 443**（或在 app/系统里
+  关 QUIC），逼它走 TCP，资源就会出现在 Web UI 里。
+- **自建网络库直连 IP**：见上面「SOCKS5」一节——这类连接不读 HTTP 代理，用 **SOCKS5(28082)** 可抓到。
+- **上游证书被拒导致连接被掐**：本仓库现在默认 `--ssl-insecure` 已规避；若你设了 `SSL_VERIFY=1`
+  又碰到上游证书有问题，那条流量就会失败、看起来“少了”。
+- **SSL Pinning**：被 pin 的连接握手失败，资源加载不出来（见下一节用 frida 绕过）。
+- mitmweb 默认**只高亮 HTTP(S) 流**；纯 TCP/WebSocket 流也会列出但样式不同，注意别划过去了。
+
+### 2. 像 `POST http://59.82.113.10:443/amdc/mobileDispatch` 这种“奇怪流量”
+
+这**不是 mitmproxy 识别错**。它是**阿里系移动网络库的 AMDC 调度**（Alibaba Mobile Dispatch
+Center，`appkey=...`、`secData=...`、`Dalvik` UA 是其特征）：app 启动时问服务端“该连哪些
+IP/端口、用什么协议”。
+
+关键点：它是**明文 HTTP，但发到 TCP 443 端口**——阿里网络库故意这么做（body 里的 `secData`
+在应用层自行加密），好让流量看起来像 HTTPS 以穿过中间设备。所以 mitmproxy 如实显示成
+`http://...:443/` 是**正确**的：如果是真的 TLS，它会显示 `https://`。无需处理，属正常 app 行为。
+
+> 这也解释了为什么有些资源要靠 SOCKS5 才抓得到：AMDC 返回的 IP，app 往往会**直连**而不走
+> HTTP 代理。
 
 ---
 
